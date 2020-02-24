@@ -116,17 +116,28 @@ class StateLogger(object):
             def log_outcomes_init(self, *args, **kwargs):
                 cls_init(self, *args, **kwargs)
                 execute_method = getattr(self, 'execute')
+                setattr(self, "execution_start_time", None)
                 @wraps(execute_method)
                 def execute_wrapper(*args, **kwargs):
                     outcome = None
+                    if not getattr(self, "execution_start_time"):
+                        self.execution_start_time = rospy.get_time()
                     try:
                         outcome = execute_method(*args, **kwargs)
                         return outcome
                     finally:
-                        if StateLogger.enabled and outcome != LoopbackState._loopback_name:
+                        if StateLogger.enabled and outcome != LoopbackState._loopback_name:                    
+                            execution_start_time = getattr(self, "execution_start_time")
+                            if execution_start_time:
+                                duration = rospy.get_time() - execution_start_time
+                                setattr(self, "execution_start_time", None)
+                            else:
+                                duration = 0
+        
                             StateLogger.get(name).info(dict(
                                 StateLogger._basic(self),
-                                outcome=outcome))
+                                outcome=outcome, 
+                                duration=duration))
                 setattr(self, 'execute', execute_wrapper)
             cls.__init__ = log_outcomes_init
             return cls
